@@ -6,6 +6,7 @@ load_dotenv()
 MODEL_NAME = os.getenv("MODEL_NAME")
 DATASET_NAME = os.getenv("DATASET_NAME")
 OUTPUT_DIR = os.getenv("OUTPUT_DIR")
+USE_QLORA = os.getenv("USE_QLORA") == "true"
 
 MODEL_REGISTRY = {
     "qwen": "Qwen/Qwen3-0.6B",
