@@ -1,9 +1,8 @@
 
 # Environment variables (Secrets)
-.env
-.env.local
+llm_finetune/
 .venv/
-/llm_finetune
+venv/
 env/
 
 # Model checkpoints and weights
