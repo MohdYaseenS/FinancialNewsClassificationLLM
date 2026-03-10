@@ -20,3 +20,4 @@ env/
 # Python/Environment
 __pycache__/
 *.pyc
+.env
