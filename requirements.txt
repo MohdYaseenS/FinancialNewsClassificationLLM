@@ -7,3 +7,4 @@ trl
 openai 
 scikit-learn 
 gradio
+dotenv
