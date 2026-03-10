@@ -8,19 +8,13 @@ from configs.config import OUTPUT_DIR
 
 def train():
 
+    print("Starting training pipeline...")
+
+    print("Loading model...")
     model, tokenizer = load_model()
 
-    dataset = load_training_dataset()
-
-    def tokenize(example):
-        return tokenizer(
-            example["text"],
-            truncation=True,
-            padding="max_length",
-            max_length=512
-        )
-
-    tokenized_dataset = dataset.map(tokenize, batched=True)
+    print("Loading dataset...")
+    tokenized_dataset = load_training_dataset(tokenizer)
 
     lora_config = LoraConfig(
         r=8,
@@ -60,3 +54,6 @@ def train():
     trainer.train()
 
     model.save_pretrained(OUTPUT_DIR)
+
+if __name__ == "__main__":
+    train()
