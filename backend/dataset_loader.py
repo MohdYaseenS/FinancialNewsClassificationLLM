@@ -5,6 +5,11 @@ from configs.config import DATASET_NAME
 def load_training_dataset(tokenizer):
 
     dataset = load_dataset(DATASET_NAME)["train"]
+    split_dataset = dataset.train_test_split(
+    test_size = 0.8, shuffle = True, seed=42
+    )
+    train_dataset = split_dataset["train"]
+    test_dataset = split_dataset["test"]
 
     def format_prompt(example):
 
@@ -36,6 +41,13 @@ def load_training_dataset(tokenizer):
 
         return {"text": formatted_text}
 
-    dataset = dataset.map(format_prompt)
+    train_dataset = train_dataset.map(
+        format_prompt,
+        remove_columns=list(train_dataset.features)
+    )
+    test_dataset = test_dataset.map(
+        format_prompt,
+        remove_columns=list(test_dataset.features)
+    )
 
-    return dataset
+    return train_dataset, test_dataset
