@@ -102,6 +102,7 @@ def train():
     print("Loading model...")
 
     model, tokenizer = load_model()
+    print("Model device:", next(model.parameters()).device)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -152,7 +153,7 @@ def train():
         fp16=not torch.cuda.is_bf16_supported(),
         bf16=torch.cuda.is_bf16_supported(),
         max_grad_norm=0.3,
-        warmup_ratio=0.03,
+        warmup_steps=0.03,
         lr_scheduler_type="constant",
         report_to="none"
     )
@@ -167,9 +168,7 @@ def train():
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
         peft_config=lora_config,
-        tokenizer=tokenizer,
-        dataset_text_field="text",
-        max_seq_length=512
+        processing_class=tokenizer
     )
 
     print("\nTrainer initialized.")
