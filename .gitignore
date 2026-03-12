@@ -21,3 +21,4 @@ env/
 __pycache__/
 *.pyc
 .env
+0.46.1
