@@ -1,59 +1,220 @@
-from transformers import TrainingArguments, Trainer, DataCollatorForLanguageModeling
-from peft import LoraConfig, get_peft_model
+import torch
+import gc
+
+from transformers import TrainingArguments
+from peft import LoraConfig, prepare_model_for_kbit_training
+from trl import SFTTrainer
 
 from backend.model_loader import load_model
 from backend.dataset_loader import load_training_dataset
-from configs.config import OUTPUT_DIR
+from configs.config import OUTPUT_DIR, USE_QLORA
+
+from sklearn.metrics import confusion_matrix, classification_report
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+def evaluate_model(model, tokenizer, test_dataset):
+
+    print("\nRunning evaluation on test dataset...")
+
+    y_true = []
+    y_pred = []
+
+    model.eval()
+
+    for example in test_dataset:
+
+        prompt = example["text"]
+
+        inputs = tokenizer(
+            prompt,
+            return_tensors="pt"
+        ).to(model.device)
+
+        with torch.no_grad():
+
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=5,
+                do_sample=False
+            )
+
+        prediction = tokenizer.decode(
+            outputs[0],
+            skip_special_tokens=True
+        )
+
+        pred_label = prediction.split("\n")[-1].strip()
+
+        true_label = example["text"].split("\n")[-1].strip()
+
+        y_pred.append(pred_label)
+        y_true.append(true_label)
+
+    return y_true, y_pred
+
+
+def save_confusion_matrix(y_true, y_pred):
+
+    labels = ["positive", "negative", "neutral"]
+
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+
+    print("\nClassification Report:\n")
+    print(classification_report(y_true, y_pred))
+
+    df_cm = pd.DataFrame(
+        cm,
+        index=labels,
+        columns=labels
+    )
+
+    plt.figure(figsize=(6, 5))
+
+    sns.heatmap(
+        df_cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues"
+    )
+
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
+    plt.title("Confusion Matrix")
+
+    path = f"{OUTPUT_DIR}/confusion_matrix.png"
+
+    plt.savefig(path)
+
+    print(f"\nConfusion matrix saved to {path}")
 
 
 def train():
 
-    print("Starting training pipeline...")
+    print("\nStarting training pipeline...\n")
+
+    # ---------------------------------------------------
+    # Load model
+    # ---------------------------------------------------
 
     print("Loading model...")
+
     model, tokenizer = load_model()
 
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    # ---------------------------------------------------
+    # Load dataset
+    # ---------------------------------------------------
+
     print("Loading dataset...")
-    tokenized_dataset = load_training_dataset(tokenizer)
+
+    train_dataset, test_dataset = load_training_dataset(tokenizer)
+
+    # ---------------------------------------------------
+    # Prepare model for QLoRA
+    # ---------------------------------------------------
+
+    if USE_QLORA:
+        print("Preparing model for QLoRA...")
+        model = prepare_model_for_kbit_training(model)
+
+    # ---------------------------------------------------
+    # LoRA configuration
+    # ---------------------------------------------------
+
+    print("Applying LoRA...")
 
     lora_config = LoraConfig(
         r=8,
         lora_alpha=16,
-        target_modules=[
-            "q_proj",
-            "v_proj"
-        ],
+        target_modules=["q_proj", "v_proj"],
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM"
     )
 
-    model = get_peft_model(model, lora_config)
+    # ---------------------------------------------------
+    # Training arguments
+    # ---------------------------------------------------
 
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=4,
-        num_train_epochs=3,
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=2,
         learning_rate=2e-4,
-        logging_steps=10,
-        save_steps=200,
-        fp16=True
+        num_train_epochs=1,
+        logging_steps=25,
+        save_strategy="epoch",
+        fp16=not torch.cuda.is_bf16_supported(),
+        bf16=torch.cuda.is_bf16_supported(),
+        max_grad_norm=0.3,
+        warmup_ratio=0.03,
+        lr_scheduler_type="constant",
+        report_to="none"
     )
 
-    trainer = Trainer(
+    # ---------------------------------------------------
+    # Trainer
+    # ---------------------------------------------------
+
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
-        train_dataset=tokenized_dataset,
-        data_collator=DataCollatorForLanguageModeling(
-            tokenizer,
-            mlm=False
-        )
+        train_dataset=train_dataset,
+        eval_dataset=test_dataset,
+        peft_config=lora_config,
+        tokenizer=tokenizer,
+        dataset_text_field="text",
+        max_seq_length=512
     )
+
+    print("\nTrainer initialized.")
+
+    # ---------------------------------------------------
+    # Training
+    # ---------------------------------------------------
+
+    print("\nStarting fine-tuning...\n")
 
     trainer.train()
 
-    model.save_pretrained(OUTPUT_DIR)
+    print("\nFine-tuning complete!")
+
+    # ---------------------------------------------------
+    # Save adapter
+    # ---------------------------------------------------
+
+    print(f"\nSaving LoRA adapter to {OUTPUT_DIR}")
+
+    trainer.save_model(OUTPUT_DIR)
+    tokenizer.save_pretrained(OUTPUT_DIR)
+
+    print("Adapter and tokenizer saved.")
+
+    # ---------------------------------------------------
+    # Clean memory
+    # ---------------------------------------------------
+
+    del trainer
+    torch.cuda.empty_cache()
+    gc.collect()
+
+    # ---------------------------------------------------
+    # Evaluation
+    # ---------------------------------------------------
+
+    print("\nStarting evaluation...")
+
+    y_true, y_pred = evaluate_model(model, tokenizer, test_dataset)
+
+    save_confusion_matrix(y_true, y_pred)
+
+    print("\nPipeline complete.\n")
+
 
 if __name__ == "__main__":
     train()
