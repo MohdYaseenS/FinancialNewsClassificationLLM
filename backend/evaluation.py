@@ -26,7 +26,11 @@ def load_trained_model():
     )
 
     print("Loading LoRA adapter...")
-    model = PeftModel.from_pretrained(base_model, OUTPUT_DIR)
+    model = PeftModel.from_pretrained(
+        base_model,
+        OUTPUT_DIR,
+        is_trainable=False
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(OUTPUT_DIR)
 
