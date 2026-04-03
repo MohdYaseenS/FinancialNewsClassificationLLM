@@ -9,87 +9,6 @@ from backend.model_loader import load_model
 from backend.dataset_loader import load_training_dataset
 from configs.config import OUTPUT_DIR, USE_QLORA
 
-from sklearn.metrics import confusion_matrix, classification_report
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-
-def evaluate_model(model, tokenizer, test_dataset):
-
-    print("\nRunning evaluation on test dataset...")
-
-    y_true = []
-    y_pred = []
-
-    model.eval()
-
-    for example in test_dataset:
-
-        prompt = example["text"]
-
-        inputs = tokenizer(
-            prompt,
-            return_tensors="pt"
-        ).to(model.device)
-
-        with torch.no_grad():
-
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=5,
-                do_sample=False
-            )
-
-        prediction = tokenizer.decode(
-            outputs[0],
-            skip_special_tokens=True
-        )
-
-        pred_label = prediction.split("\n")[-1].strip()
-
-        true_label = example["text"].split("\n")[-1].strip()
-
-        y_pred.append(pred_label)
-        y_true.append(true_label)
-
-    return y_true, y_pred
-
-
-def save_confusion_matrix(y_true, y_pred):
-
-    labels = ["positive", "negative", "neutral"]
-
-    cm = confusion_matrix(y_true, y_pred, labels=labels)
-
-    print("\nClassification Report:\n")
-    print(classification_report(y_true, y_pred))
-
-    df_cm = pd.DataFrame(
-        cm,
-        index=labels,
-        columns=labels
-    )
-
-    plt.figure(figsize=(6, 5))
-
-    sns.heatmap(
-        df_cm,
-        annot=True,
-        fmt="d",
-        cmap="Blues"
-    )
-
-    plt.xlabel("Predicted")
-    plt.ylabel("Actual")
-    plt.title("Confusion Matrix")
-
-    path = f"{OUTPUT_DIR}/confusion_matrix.png"
-
-    plt.savefig(path)
-
-    print(f"\nConfusion matrix saved to {path}")
-
 
 def train():
 
@@ -201,18 +120,6 @@ def train():
     del trainer
     torch.cuda.empty_cache()
     gc.collect()
-
-    # ---------------------------------------------------
-    # Evaluation
-    # ---------------------------------------------------
-
-    print("\nStarting evaluation...")
-
-    y_true, y_pred = evaluate_model(model, tokenizer, test_dataset)
-
-    save_confusion_matrix(y_true, y_pred)
-
-    print("\nPipeline complete.\n")
 
 
 if __name__ == "__main__":
