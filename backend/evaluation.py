@@ -21,7 +21,8 @@ def load_trained_model():
     print("Loading base model...")
     base_model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        device_map="auto"
+        torch_dtype=torch.float32,   # force real weights
+        device_map=None              # IMPORTANT: disable auto offloading
     )
 
     print("Loading LoRA adapter...")
