@@ -8,6 +8,11 @@ from trl import SFTTrainer
 
 from backend.model_loader import load_model
 from backend.dataset_loader import load_training_dataset
+from backend.evaluation import evaluate_model
+
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+
 from configs.config import OUTPUT_DIR, USE_QLORA
 
 
@@ -26,7 +31,7 @@ def train():
         tokenizer.pad_token = tokenizer.eos_token
 
     # ---------------------------------------------------
-    # Prepare model for QLoRA (MUST be before LoRA loading)
+    # Prepare model for QLoRA
     # ---------------------------------------------------
 
     if USE_QLORA:
@@ -50,7 +55,6 @@ def train():
             adapter_path,
             is_trainable=True
         )
-
     else:
         print("No existing adapter found. Training from base model.")
 
@@ -62,7 +66,7 @@ def train():
     train_dataset, test_dataset = load_training_dataset(tokenizer)
 
     # ---------------------------------------------------
-    # LoRA configuration (ONLY if no existing adapter)
+    # LoRA config (only if fresh training)
     # ---------------------------------------------------
 
     lora_config = None
@@ -83,14 +87,16 @@ def train():
     # Training arguments
     # ---------------------------------------------------
 
+    num_epochs = 10  # 🔥 change as needed
+
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
         per_device_train_batch_size=4,
         gradient_accumulation_steps=2,
         learning_rate=2e-4,
-        num_train_epochs=1,
+        num_train_epochs=1,  # IMPORTANT: we control epochs manually
         logging_steps=25,
-        save_strategy="epoch",
+        save_strategy="no",  # we save manually
         fp16=not torch.cuda.is_bf16_supported(),
         bf16=torch.cuda.is_bf16_supported(),
         max_grad_norm=0.3,
@@ -108,24 +114,60 @@ def train():
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
-        peft_config=lora_config,  # None if continuing training
+        peft_config=lora_config,
         processing_class=tokenizer
     )
 
     print("\nTrainer initialized.")
 
-    # Optional debug (VERY useful)
     try:
         model.print_trainable_parameters()
     except:
         pass
 
     # ---------------------------------------------------
-    # Training
+    # Training Loop (manual epochs)
     # ---------------------------------------------------
 
     print("\nStarting fine-tuning...\n")
-    trainer.train()
+
+    eval_history = []
+
+    for epoch in range(num_epochs):
+
+        print(f"\n========== Epoch {epoch+1} / {num_epochs} ==========")
+
+        trainer.train()
+
+        # ---------------------------
+        # Get training loss
+        # ---------------------------
+
+        loss = None
+        for log in reversed(trainer.state.log_history):
+            if "loss" in log:
+                loss = log["loss"]
+                break
+
+        print(f"Training Loss: {loss}")
+
+        # ---------------------------
+        # Evaluation
+        # ---------------------------
+
+        print("Running evaluation...")
+
+        y_true, y_pred = evaluate_model(model, tokenizer, test_dataset)
+
+        acc = accuracy_score(y_true, y_pred)
+
+        print(f"Validation Accuracy: {acc}")
+
+        eval_history.append({
+            "epoch": epoch + 1,
+            "accuracy": acc,
+            "loss": loss
+        })
 
     print("\nFine-tuning complete!")
 
@@ -141,7 +183,32 @@ def train():
     print("Adapter and tokenizer saved.")
 
     # ---------------------------------------------------
-    # Clean memory
+    # Plot metrics
+    # ---------------------------------------------------
+
+    print("\nPlotting metrics...")
+
+    epochs = [x["epoch"] for x in eval_history]
+    accs = [x["accuracy"] for x in eval_history]
+    losses = [x["loss"] for x in eval_history]
+
+    plt.figure()
+
+    plt.plot(epochs, accs, marker='o', label="Accuracy")
+    plt.plot(epochs, losses, marker='o', label="Loss")
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Value")
+    plt.title("Training Loss & Validation Accuracy")
+    plt.legend()
+
+    path = f"{OUTPUT_DIR}/training_curve.png"
+    plt.savefig(path)
+
+    print(f"Plot saved to {path}")
+
+    # ---------------------------------------------------
+    # Cleanup
     # ---------------------------------------------------
 
     del trainer
