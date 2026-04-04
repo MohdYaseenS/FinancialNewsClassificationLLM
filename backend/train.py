@@ -1,8 +1,9 @@
 import torch
 import gc
+import os
 
 from transformers import TrainingArguments
-from peft import LoraConfig, prepare_model_for_kbit_training
+from peft import LoraConfig, prepare_model_for_kbit_training, PeftModel
 from trl import SFTTrainer
 
 from backend.model_loader import load_model
@@ -18,24 +19,14 @@ def train():
     # Load model
     # ---------------------------------------------------
 
-    print("Loading model...")
-
+    print("Loading base model...")
     model, tokenizer = load_model()
-    print("Model device:", next(model.parameters()).device)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     # ---------------------------------------------------
-    # Load dataset
-    # ---------------------------------------------------
-
-    print("Loading dataset...")
-
-    train_dataset, test_dataset = load_training_dataset(tokenizer)
-
-    # ---------------------------------------------------
-    # Prepare model for QLoRA
+    # Prepare model for QLoRA (MUST be before LoRA loading)
     # ---------------------------------------------------
 
     if USE_QLORA:
@@ -43,19 +34,50 @@ def train():
         model = prepare_model_for_kbit_training(model)
 
     # ---------------------------------------------------
-    # LoRA configuration
+    # Check for existing adapter (resume training)
     # ---------------------------------------------------
 
-    print("Applying LoRA...")
+    adapter_path = OUTPUT_DIR
+    adapter_file = os.path.join(adapter_path, "adapter_model.bin")
 
-    lora_config = LoraConfig(
-        r=8,
-        lora_alpha=16,
-        target_modules=["q_proj", "v_proj"],
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM"
-    )
+    use_existing_adapter = os.path.exists(adapter_file)
+
+    if use_existing_adapter:
+        print("Existing adapter found. Loading for continued training...")
+
+        model = PeftModel.from_pretrained(
+            model,
+            adapter_path,
+            is_trainable=True
+        )
+
+    else:
+        print("No existing adapter found. Training from base model.")
+
+    # ---------------------------------------------------
+    # Load dataset
+    # ---------------------------------------------------
+
+    print("Loading dataset...")
+    train_dataset, test_dataset = load_training_dataset(tokenizer)
+
+    # ---------------------------------------------------
+    # LoRA configuration (ONLY if no existing adapter)
+    # ---------------------------------------------------
+
+    lora_config = None
+
+    if not use_existing_adapter:
+        print("Applying fresh LoRA configuration...")
+
+        lora_config = LoraConfig(
+            r=8,
+            lora_alpha=16,
+            target_modules=["q_proj", "v_proj"],
+            lora_dropout=0.05,
+            bias="none",
+            task_type="CAUSAL_LM"
+        )
 
     # ---------------------------------------------------
     # Training arguments
@@ -86,18 +108,23 @@ def train():
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
-        peft_config=lora_config,
+        peft_config=lora_config,  # None if continuing training
         processing_class=tokenizer
     )
 
     print("\nTrainer initialized.")
+
+    # Optional debug (VERY useful)
+    try:
+        model.print_trainable_parameters()
+    except:
+        pass
 
     # ---------------------------------------------------
     # Training
     # ---------------------------------------------------
 
     print("\nStarting fine-tuning...\n")
-
     trainer.train()
 
     print("\nFine-tuning complete!")
@@ -120,6 +147,8 @@ def train():
     del trainer
     torch.cuda.empty_cache()
     gc.collect()
+
+    print("\nTraining pipeline complete.\n")
 
 
 if __name__ == "__main__":

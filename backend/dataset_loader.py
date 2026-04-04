@@ -15,12 +15,13 @@ def load_training_dataset(tokenizer):
 
         system_prompt = (
             "Classify the sentiment of the following sentence from News "
-            "as positive, negative, or neutral."
+            "as positive, negative, or neutral. "
+            "Answer ONLY with one word."
         )
 
         user_prompt = f"Sentence: {example['text']}"
 
-        assistant_response = example["sentiment"]
+        label = example["sentiment"].strip().lower()
 
         messages = [
             {
@@ -29,7 +30,7 @@ def load_training_dataset(tokenizer):
             },
             {
                 "role": "assistant",
-                "content": assistant_response
+                "content": label
             }
         ]
 
