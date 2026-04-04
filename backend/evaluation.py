@@ -43,6 +43,53 @@ def load_trained_model():
 # ---------------------------------------------------
 # Evaluation Logic
 # ---------------------------------------------------
+def extract_prompt(full_text):
+    return full_text.split("<|im_start|>assistant")[0]
+
+def extract_true_label(full_text):
+    try:
+        # isolate assistant block
+        assistant_part = full_text.split("<|im_start|>assistant")[1]
+        assistant_part = assistant_part.split("<|im_end|>")[0]
+
+        # remove think block completely
+        if "<think>" in assistant_part:
+            assistant_part = assistant_part.split("</think>")[-1]
+
+        # clean lines
+        lines = [l.strip().lower() for l in assistant_part.split("\n") if l.strip()]
+
+        # last valid label
+        for line in reversed(lines):
+            if line in ["positive", "negative", "neutral"]:
+                return line
+
+    except Exception as e:
+        print("Label extraction error:", e)
+
+    return "unknown"
+
+def extract_pred_label(text):
+    try:
+        if "<|im_start|>assistant" in text:
+            text = text.split("<|im_start|>assistant")[-1]
+
+        if "<|im_end|>" in text:
+            text = text.split("<|im_end|>")[0]
+
+        if "<think>" in text:
+            text = text.split("</think>")[-1]
+
+        lines = [l.strip().lower() for l in text.split("\n") if l.strip()]
+
+        for line in reversed(lines):
+            if line in ["positive", "negative", "neutral"]:
+                return line
+
+    except Exception as e:
+        print("Prediction extraction error:", e)
+
+    return "unknown"
 
 def evaluate_model(model, tokenizer, test_dataset):
 
@@ -55,7 +102,10 @@ def evaluate_model(model, tokenizer, test_dataset):
 
     for example in test_dataset:
 
-        prompt = example["text"]
+        full_text = example["text"]
+        prompt = extract_prompt(full_text)
+    
+        true_label = extract_true_label(full_text)
 
         inputs = tokenizer(
             prompt,
@@ -65,7 +115,7 @@ def evaluate_model(model, tokenizer, test_dataset):
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=5,
+                max_new_tokens=10,
                 do_sample=False
             )
 
@@ -74,8 +124,7 @@ def evaluate_model(model, tokenizer, test_dataset):
             skip_special_tokens=True
         )
 
-        pred_label = prediction.split("\n")[-1].strip()
-        true_label = example["text"].split("\n")[-1].strip()
+        pred_label = extract_pred_label(prediction)
 
         y_pred.append(pred_label)
         y_true.append(true_label)
