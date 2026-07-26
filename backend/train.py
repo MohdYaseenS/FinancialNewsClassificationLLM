@@ -3,7 +3,7 @@ import gc
 import os
 
 from transformers import TrainingArguments
-from peft import LoraConfig, prepare_model_for_kbit_training, PeftModel
+from peft import LoraConfig, prepare_model_for_kbit_training
 from trl import SFTTrainer
 
 from backend.model_loader import load_model
@@ -24,11 +24,8 @@ def train():
     # Load model
     # ---------------------------------------------------
 
-    print("Loading base model...")
-    model, tokenizer = load_model()
-
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    print("Loading model...")
+    model, tokenizer = load_model(trainable=True)
 
     # ---------------------------------------------------
     # Prepare model for QLoRA
@@ -38,26 +35,9 @@ def train():
         print("Preparing model for QLoRA...")
         model = prepare_model_for_kbit_training(model)
 
-    # ---------------------------------------------------
-    # Check for existing adapter (resume training)
-    # ---------------------------------------------------
-
-    adapter_path = OUTPUT_DIR
-    adapter_file = os.path.join(adapter_path, "adapter_model.bin")
-
-    use_existing_adapter = os.path.exists(adapter_file)
-
-    if use_existing_adapter:
-        print("Existing adapter found. Loading for continued training...")
-
-        model = PeftModel.from_pretrained(
-            model,
-            adapter_path,
-            is_trainable=True
-        )
-    else:
-        print("No existing adapter found. Training from base model.")
-
+    adapter_exists = os.path.exists(
+    os.path.join(OUTPUT_DIR, "adapter_config.json")
+    )
     # ---------------------------------------------------
     # Load dataset
     # ---------------------------------------------------
@@ -71,7 +51,7 @@ def train():
 
     lora_config = None
 
-    if not use_existing_adapter:
+    if not adapter_exists:
         print("Applying fresh LoRA configuration...")
 
         lora_config = LoraConfig(
