@@ -1,15 +1,47 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from transformers import BitsAndBytesConfig
+import os
 import torch
 
-from configs.config import MODEL_NAME, MODEL_REGISTRY, USE_QLORA
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    BitsAndBytesConfig,
+)
+from peft import PeftModel
+
+from configs.config import (
+    MODEL_NAME,
+    MODEL_REGISTRY,
+    OUTPUT_DIR,
+    USE_QLORA,
+)
 
 
-def load_model():
+def load_model(trainable=False):
+    """
+    Loads the model for both training and inference.
+
+    If a LoRA adapter exists in OUTPUT_DIR, it is loaded automatically.
+    Otherwise, the base model is returned.
+
+    Args:
+        trainable (bool):
+            True  -> LoRA adapter remains trainable (training)
+            False -> LoRA adapter loaded for inference
+
+    Returns:
+        model, tokenizer
+    """
 
     model_id = MODEL_REGISTRY[MODEL_NAME]
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    # -----------------------------
+    # Load Base Model
+    # -----------------------------
 
     if USE_QLORA:
 
@@ -17,20 +49,45 @@ def load_model():
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True
+            bnb_4bit_use_double_quant=True,
         )
 
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
             quantization_config=bnb_config,
-            device_map="auto"
+            device_map="auto",
         )
 
     else:
 
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
-            device_map="auto"
+            device_map="auto",
         )
+
+    # -----------------------------
+    # Load LoRA Adapter (if present)
+    # -----------------------------
+
+    adapter_config = os.path.join(OUTPUT_DIR, "adapter_config.json")
+
+    if os.path.exists(adapter_config):
+
+        print(f"Found LoRA adapter in '{OUTPUT_DIR}'. Loading fine-tuned model...")
+
+        model = PeftModel.from_pretrained(
+            model,
+            OUTPUT_DIR,
+            is_trainable=trainable,
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(OUTPUT_DIR)
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+    else:
+
+        print("No LoRA adapter found. Using base model.")
 
     return model, tokenizer
