@@ -67,12 +67,12 @@ def train():
     # Training arguments
     # ---------------------------------------------------
 
-    num_epochs = 10  # 🔥 change as needed
+    num_epochs = 2
 
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=2,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=8,
         learning_rate=2e-4,
         num_train_epochs=1,  # IMPORTANT: we control epochs manually
         logging_steps=25,

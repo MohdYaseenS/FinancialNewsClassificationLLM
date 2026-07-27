@@ -1,43 +1,12 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from peft import PeftModel
 from sklearn.metrics import confusion_matrix, classification_report
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
 from backend.dataset_loader import load_training_dataset
-from configs.config import MODEL_NAME, MODEL_REGISTRY, OUTPUT_DIR
-
-
-# ---------------------------------------------------
-# Load trained model (Base + LoRA adapter)
-# ---------------------------------------------------
-
-def load_trained_model():
-
-    model_id = MODEL_REGISTRY[MODEL_NAME]
-
-    print("Loading base model...")
-    base_model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        torch_dtype=torch.float32,   # force real weights
-        device_map=None              # IMPORTANT: disable auto offloading
-    )
-
-    print("Loading LoRA adapter...")
-    model = PeftModel.from_pretrained(
-        base_model,
-        OUTPUT_DIR,
-        is_trainable=False
-    )
-
-    tokenizer = AutoTokenizer.from_pretrained(OUTPUT_DIR)
-
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    return model, tokenizer
+from backend.model_loader import load_model
+from configs.config import OUTPUT_DIR
 
 
 # ---------------------------------------------------
@@ -175,7 +144,7 @@ def main():
 
     print("\nStarting evaluation pipeline...\n")
 
-    model, tokenizer = load_trained_model()
+    model, tokenizer = load_model(trainable=False)
 
     print("Loading dataset...")
     _, test_dataset = load_training_dataset(tokenizer)
