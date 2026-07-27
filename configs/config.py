@@ -14,7 +14,11 @@ MODEL_REGISTRY = {
     "tinyllama": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 }
 
-FRONTEND_PORT = os.getenv("FRONTEND_PORT")
-BACKTEND_PORT = os.getenv("BACKEND_PORT")
+# Server configuration
+BACKEND_HOST = os.getenv("BACKEND_HOST", "127.0.0.1")
+BACKEND_PORT = int(os.getenv("BACKEND_PORT", 8000))
+
+FRONTEND_HOST = os.getenv("FRONTEND_HOST", "127.0.0.1")
+FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", 7860))
 
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT")

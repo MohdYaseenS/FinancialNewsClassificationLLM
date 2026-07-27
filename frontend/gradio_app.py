@@ -1,7 +1,14 @@
 import gradio as gr
 import requests
 
-API = "http://localhost:8000/generate"
+from configs.config import (
+    BACKEND_HOST,
+    BACKEND_PORT,
+    FRONTEND_HOST,
+    FRONTEND_PORT,
+)
+
+API = f"http://{BACKEND_HOST}:{BACKEND_PORT}/generate"
 
 
 def classify_news(text):
@@ -28,4 +35,7 @@ demo = gr.Interface(
     description="Enter a financial news headline or article. The fine-tuned LLM will classify it as Positive, Negative, or Neutral."
 )
 
-demo.launch()
+demo.launch(
+    server_name=FRONTEND_HOST,
+    server_port=FRONTEND_PORT
+)
