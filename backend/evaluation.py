@@ -8,7 +8,7 @@ from backend.dataset_loader import load_training_dataset
 from backend.model_loader import load_model
 from configs.config import OUTPUT_DIR
 
-
+from tqdm.auto import tqdm
 # ---------------------------------------------------
 # Evaluation Logic
 # ---------------------------------------------------
@@ -69,11 +69,16 @@ def evaluate_model(model, tokenizer, test_dataset):
 
     model.eval()
 
-    for example in test_dataset:
+    for example in tqdm(
+        test_dataset,
+        desc="Evaluating",
+        unit="sample",
+        colour="green"
+    ):
 
         full_text = example["text"]
         prompt = extract_prompt(full_text)
-    
+
         true_label = extract_true_label(full_text)
 
         inputs = tokenizer(
