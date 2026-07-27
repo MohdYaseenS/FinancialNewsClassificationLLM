@@ -13,8 +13,9 @@ from backend.evaluation import evaluate_model
 from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 
-from configs.config import OUTPUT_DIR, USE_QLORA
+from configs.config import OUTPUT_DIR, USE_QLORA, MODEL_NAME
 
+MODEL_DIR =f"{OUTPUT_DIR}/{MODEL_NAME}"
 
 def train():
 
@@ -36,7 +37,7 @@ def train():
         model = prepare_model_for_kbit_training(model)
 
     adapter_exists = os.path.exists(
-    os.path.join(OUTPUT_DIR, "adapter_config.json")
+    os.path.join(MODEL_DIR, "adapter_config.json")
     )
     # ---------------------------------------------------
     # Load dataset
@@ -44,6 +45,8 @@ def train():
 
     print("Loading dataset...")
     train_dataset, test_dataset = load_training_dataset(tokenizer)
+    print(f"length of train_dataset: {len(train_dataset)}")
+    print(f"length of test_dataset: {len(test_dataset)}")
 
     # ---------------------------------------------------
     # LoRA config (only if fresh training)
@@ -70,7 +73,7 @@ def train():
     num_epochs = 2
 
     training_args = TrainingArguments(
-        output_dir=OUTPUT_DIR,
+        output_dir=MODEL_DIR,
         per_device_train_batch_size=1,
         gradient_accumulation_steps=8,
         learning_rate=2e-4,
@@ -155,10 +158,10 @@ def train():
     # Save adapter
     # ---------------------------------------------------
 
-    print(f"\nSaving LoRA adapter to {OUTPUT_DIR}")
+    print(f"\nSaving LoRA adapter to {MODEL_DIR}")
 
-    trainer.save_model(OUTPUT_DIR)
-    tokenizer.save_pretrained(OUTPUT_DIR)
+    trainer.save_model(MODEL_DIR)
+    tokenizer.save_pretrained(MODEL_DIR)
 
     print("Adapter and tokenizer saved.")
 
