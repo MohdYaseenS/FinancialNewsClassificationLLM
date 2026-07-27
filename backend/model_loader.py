@@ -15,7 +15,7 @@ from configs.config import (
     USE_QLORA,
 )
 
-MODEL_DIR= f'{OUTPUT_DIR}/{MODEL_NAME}'
+MODEL_DIR = os.path.join(OUTPUT_DIR, MODEL_NAME)
 
 def load_model(trainable=False):
     """
@@ -69,26 +69,30 @@ def load_model(trainable=False):
     # -----------------------------
     # Load LoRA Adapter (if present)
     # -----------------------------
+    if os.path.isdir(MODEL_DIR):
 
-    adapter_config = os.path.join(MODEL_DIR, "adapter_config.json")
+        adapter_config = os.path.join(MODEL_DIR, "adapter_config.json")
 
-    if os.path.exists(adapter_config):
+        if os.path.isfile(adapter_config):
 
-        print(f"Found LoRA adapter in '{MODEL_DIR}'. Loading fine-tuned model...")
+            print(f"Found LoRA adapter in '{MODEL_DIR}'. Loading fine-tuned model...")
 
-        model = PeftModel.from_pretrained(
-            model,
-            MODEL_DIR,
-            is_trainable=trainable,
-        )
+            model = PeftModel.from_pretrained(
+                model,
+                MODEL_DIR,
+                is_trainable=trainable,
+            )
 
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
+            tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
 
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
+
+        else:
+            print(f"No LoRA adapter found in '{MODEL_DIR}'. Using base model.")
 
     else:
 
-        print("No LoRA adapter found. Using base model.")
+        print(f"Model directory '{MODEL_DIR}' does not exist. Using base model.")
 
     return model, tokenizer

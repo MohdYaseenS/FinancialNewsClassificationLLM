@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from configs.config import OUTPUT_DIR, USE_QLORA, MODEL_NAME
 
-MODEL_DIR =f"{OUTPUT_DIR}/{MODEL_NAME}"
+MODEL_DIR = os.path.join(OUTPUT_DIR, MODEL_NAME)
 
 def train():
 
