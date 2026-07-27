@@ -5,7 +5,7 @@ API = "http://localhost:8000/generate"
 
 def chat(prompt):
 
-    r = requests.post(API, params={"Text": prompt})
+    r = requests.post(API, params={"prompt": prompt})
 
     return r.json()["response"]
 
