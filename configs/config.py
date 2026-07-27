@@ -13,3 +13,8 @@ MODEL_REGISTRY = {
     "gemma": "google/gemma-2b",
     "tinyllama": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 }
+
+FRONTEND_PORT = os.getenv("FRONTEND_PORT")
+BACKTEND_PORT = os.getenv("BACKEND_PORT")
+
+SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT")
